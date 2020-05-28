@@ -2,18 +2,22 @@ import socket
 import threading
 from time import sleep
 
+#Handles the max number of messages allowed to be sent
 def ResetMaxMessages():
     global maxMessages
     sleep(1)
     maxMessages = 0
 
+#Keeps connection alive
 def heartbeat(client, lock):
     while True:
         sleep(3)
         lock.acquire()
         client.send("con-h 0x00".encode())
         lock.release()
+        clientTimeout = False
 
+#Handles user input and server respond
 def threaded(connection, lock):
     global maxMessages
     maxMessages = 0
@@ -30,20 +34,26 @@ def threaded(connection, lock):
             maxMessages = maxMessages + 1
             msgNumber = msgNumber + 2
 
+
         data = connection.recv(4096)
         from_server = data.decode()
         print(from_server)
 
+        #If server responds with this message the connection is closed
         if from_server == "con-res 0xFE":
+            connection.send("con-res 0xFF".encode())
+            sleep(1)
             connection.close()
             print("Timeout occured...")
             break
 
+        #Checks if the messages coming from the server follows the protocol
         if not from_server.startswith("res-") and not ((msgNumber - extractNumber(from_server)) == 1):
             connection.close()
             print("Protocol corrupted - connection ended...")
             break
 
+#Extracts the message number from the server message and returns it
 def extractNumber(from_server):
     global serverNumber
     if not from_server.startswith("com-0"):
@@ -52,6 +62,7 @@ def extractNumber(from_server):
         serverNumber = numberSearch[0]
         return int(serverNumber)
 
+#Asks user about custom options
 def optionsfile():
     file = open("opt.conf")
     data = file.readlines()
@@ -72,6 +83,7 @@ def optionsfile():
     with open("opt.conf", "w") as file:
         file.writelines(data)
 
+#Reads custom options from file
 def readFromConfigFile():
     global selectedMaxMessages
     global keepAlive
@@ -87,9 +99,11 @@ def readFromConfigFile():
     selectedMaxMessages = int(allLines[1][13:17])
 
 def Main():
+    #Handles user options for the connection
     optionsfile()
     readFromConfigFile()
 
+    #Creates a socket and attempt to connect to server
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect((socket.gethostname(), 4000))
     client.send(("com-0 " + socket.gethostbyname(socket.gethostname())).encode())
@@ -97,8 +111,10 @@ def Main():
     from_server = client.recv(4096)
     print(from_server.decode())
 
+    #Checks for server response and setup connection on client side
     if from_server.decode().startswith("com-0 accept"):
         client.send("com-0 accept".encode())
+
         lock = threading.Lock()
         threading.Thread(target=threaded, args=(client, lock,)).start()
         threading.Thread(target=ResetMaxMessages).start()

@@ -8,16 +8,16 @@ def timeout():
     while True:
         sleep(4)
 
+        #Resets connection if client has enabled heartbeat
         if from_client.startswith("con-h 0x00"):
             clientTimeout = False
 
         print("in timeout " + str(clientTimeout))
 
+        #If clientTimeout == True: send connection reset message
+        #If clientTimeout == False: Set it = true and sleep for 4 seconds
         if clientTimeout:
             connection.send(("con-res 0xFE").encode())
-            sleep(1.0)
-            print("Connection timed out...")
-            connection.close()
         else:
             clientTimeout = True
 
@@ -35,9 +35,15 @@ def threaded():
         from_client = data.decode()
         print(from_client)
 
-        #Checks if incoming messages breaks protocol
+        #Checks if incoming messages breaks protocol or if the connection needs to be closed
         if not from_client.startswith("msg-0"):
             clientTimeout = False
+            #Checks for timeout
+            if from_client == "con-res 0xFF":
+                connection.close()
+                print("Connection timed out...")
+                break
+            #Checks if message breaks protocol
             if not from_client.startswith("com-0") and not from_client.startswith("con-h 0x00") and ((msgNumber - extractNumber(from_client)) != 1):
                 connection.close()
                 print("Corrupt/false data received - Socket closed")
