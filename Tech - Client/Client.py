@@ -8,14 +8,14 @@ def ResetMaxMessages():
     sleep(1)
     maxMessages = 0
 
-#Keeps connection alive
+#Keeps connection alive if option is true
 def heartbeat(client, lock):
     while True:
         sleep(3)
+        #Lock for thread acquired so it doesn't conflict with user sending a message
         lock.acquire()
         client.send("con-h 0x00".encode())
         lock.release()
-        clientTimeout = False
 
 #Handles user input and server respond
 def threaded(connection, lock):
@@ -27,13 +27,12 @@ def threaded(connection, lock):
         if maxMessages <= selectedMaxMessages:
             text = input()
 
+            #Lock acquired so it doesn't conflict with the heartbeat sending a message (If set to true)
             lock.acquire()
             connection.send(("msg-" + str(msgNumber) + "=" + text).encode())
             lock.release()
 
             maxMessages = maxMessages + 1
-            msgNumber = msgNumber + 2
-
 
         data = connection.recv(4096)
         from_server = data.decode()
@@ -52,6 +51,9 @@ def threaded(connection, lock):
             connection.close()
             print("Protocol corrupted - connection ended...")
             break
+        #If the response does not break protocol: Increment the message number
+        else:
+            msgNumber = msgNumber + 2
 
 #Extracts the message number from the server message and returns it
 def extractNumber(from_server):
@@ -99,7 +101,7 @@ def readFromConfigFile():
     selectedMaxMessages = int(allLines[1][13:17])
 
 def Main():
-    #Handles user options for the connection
+    #Handles customer user options for the connection
     optionsfile()
     readFromConfigFile()
 
